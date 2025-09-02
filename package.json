@@ -1,0 +1,13 @@
+{
+  "name": "chatbot-project",
+  "version": "1.0.0",
+  "description": "智能问答系统",
+  "main": "src/backend/server.js",
+  "scripts": {
+    "start": "node src/backend/server.js",
+    "dev": "nodemon src/backend/server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

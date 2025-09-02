@@ -7,6 +7,12 @@ const path = require('path');
 // 加载环境变量
 dotenv.config();
 
+// 验证关键环境变量是否已正确加载
+if (!process.env.DASHSCOPE_API_KEY) {
+    console.error('错误: DASHSCOPE_API_KEY 环境变量未设置，请检查 .env 文件');
+    process.exit(1);
+}
+
 // 创建 Express 应用
 const app = express();
 const PORT = process.env.PORT || 3000;
