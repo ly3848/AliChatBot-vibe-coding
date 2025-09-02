@@ -1,4 +1,5 @@
 const db = require('../config/database');
+const { callAIModel, streamAIModel } = require('../services/aiService');
 
 // 生成对话标题
 function generateTitle(firstMessage) {
@@ -174,7 +175,7 @@ exports.getMessages = (req, res) => {
 };
 
 // 发送消息
-exports.sendMessage = (req, res) => {
+exports.sendMessage = async (req, res) => {
   const { conversation_id } = req.params;
   const { content } = req.body;
 
@@ -188,7 +189,7 @@ exports.sendMessage = (req, res) => {
   }
 
   // 检查对话是否存在
-  db.get('SELECT id, title FROM conversations WHERE id = ?', [conversation_id], (err, conversation) => {
+  db.get('SELECT id, title FROM conversations WHERE id = ?', [conversation_id], async (err, conversation) => {
     if (err) {
       return res.status(500).json({
         code: 1003,
@@ -236,45 +237,75 @@ exports.sendMessage = (req, res) => {
         created_at: new Date().toISOString()
       };
 
-      // 模拟AI助手回复（实际项目中这里会调用AI API）
-      const assistantContent = `我是AI助手，我收到了您的消息: "${content}"。这是一个模拟回复，在实际应用中，这里会是来自AI模型的真实回复。`;
-
-      // 保存助手消息
-      db.run(`
-        INSERT INTO messages (conversation_id, role, content) 
-        VALUES (?, ?, ?)
-      `, [conversation_id, 'assistant', assistantContent], function(err) {
+      // 获取对话历史用于AI上下文
+      db.all(`
+        SELECT role, content 
+        FROM messages 
+        WHERE conversation_id = ? 
+        ORDER BY created_at ASC
+      `, [conversation_id], async (err, rows) => {
         if (err) {
           return res.status(500).json({
             code: 1003,
-            message: '保存助手消息失败',
+            message: '获取对话历史失败',
             data: null
           });
         }
 
-        const assistantMessage = {
-          id: this.lastID,
-          conversation_id: parseInt(conversation_id),
-          role: 'assistant',
-          content: assistantContent,
-          created_at: new Date().toISOString()
-        };
+        // 构造消息历史
+        const messages = [
+          { role: 'system', content: 'You are a helpful assistant.' },
+          ...rows.map(row => ({ role: row.role, content: row.content }))
+        ];
 
-        // 更新对话的updated_at字段
-        db.run('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?', [conversation_id], (err) => {
-          if (err) {
-            console.error('更新对话时间失败:', err.message);
-          }
-        });
+        try {
+          // 调用AI服务
+          const assistantContent = await callAIModel(messages);
+          
+          // 保存助手消息
+          db.run(`
+            INSERT INTO messages (conversation_id, role, content) 
+            VALUES (?, ?, ?)
+          `, [conversation_id, 'assistant', assistantContent], function(err) {
+            if (err) {
+              return res.status(500).json({
+                code: 1003,
+                message: '保存助手消息失败',
+                data: null
+              });
+            }
 
-        res.json({
-          code: 0,
-          message: 'success',
-          data: {
-            user_message: userMessage,
-            assistant_message: assistantMessage
-          }
-        });
+            const assistantMessage = {
+              id: this.lastID,
+              conversation_id: parseInt(conversation_id),
+              role: 'assistant',
+              content: assistantContent,
+              created_at: new Date().toISOString()
+            };
+
+            // 更新对话的updated_at字段
+            db.run('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?', [conversation_id], (err) => {
+              if (err) {
+                console.error('更新对话时间失败:', err.message);
+              }
+            });
+
+            res.json({
+              code: 0,
+              message: 'success',
+              data: {
+                user_message: userMessage,
+                assistant_message: assistantMessage
+              }
+            });
+          });
+        } catch (error) {
+          return res.status(500).json({
+            code: 1003,
+            message: error.message || 'AI服务调用失败',
+            data: null
+          });
+        }
       });
     });
   });
@@ -301,7 +332,7 @@ exports.streamMessage = (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
   // 检查对话是否存在
-  db.get('SELECT id, title FROM conversations WHERE id = ?', [conversation_id], (err, conversation) => {
+  db.get('SELECT id, title FROM conversations WHERE id = ?', [conversation_id], async (err, conversation) => {
     if (err) {
       res.write(`data: ${JSON.stringify({code: 1003, message: '数据库查询失败', data: null})}\n\n`);
       return res.end();
@@ -334,22 +365,42 @@ exports.streamMessage = (req, res) => {
 
       const userMessageId = this.lastID;
 
-      // 模拟AI助手流式回复
-      const assistantContent = `我是AI助手，我收到了您的消息: "${content}"。这是一个模拟的流式回复，在实际应用中，这里会是来自AI模型的实时回复。流式传输可以让用户在等待完整回复的过程中看到部分结果，提升用户体验。`;
-      
-      // 发送开始消息
-      res.write(`data: ${JSON.stringify({type: 'start', data: {message_id: userMessageId + 1}})}\n\n`);
+      // 获取对话历史用于AI上下文
+      db.all(`
+        SELECT role, content 
+        FROM messages 
+        WHERE conversation_id = ? 
+        ORDER BY created_at ASC
+      `, [conversation_id], async (err, rows) => {
+        if (err) {
+          res.write(`data: ${JSON.stringify({code: 1003, message: '获取对话历史失败', data: null})}\n\n`);
+          return res.end();
+        }
 
-      // 分块发送内容
-      const chunks = assistantContent.match(/.{1,10}/g) || [assistantContent];
-      let index = 0;
-      
-      const sendChunk = () => {
-        if (index < chunks.length) {
-          res.write(`data: ${JSON.stringify({type: 'chunk', data: {content: chunks[index]}})}\n\n`);
-          index++;
-          setTimeout(sendChunk, 100); // 每100ms发送一次，模拟真实流式响应
-        } else {
+        // 构造消息历史
+        const messages = [
+          { role: 'system', content: 'You are a helpful assistant.' },
+          ...rows.map(row => ({ role: row.role, content: row.content }))
+        ];
+
+        try {
+          // 调用AI流式服务
+          const stream = await streamAIModel(messages);
+          
+          // 发送开始消息
+          res.write(`data: ${JSON.stringify({type: 'start', data: {message_id: userMessageId + 1}})}\n\n`);
+          
+          let assistantContent = '';
+          
+          // 处理流式响应
+          for await (const chunk of stream) {
+            const content = chunk.choices[0]?.delta?.content || '';
+            if (content) {
+              assistantContent += content;
+              res.write(`data: ${JSON.stringify({type: 'chunk', data: {content: content}})}\n\n`);
+            }
+          }
+          
           // 保存助手消息到数据库
           db.run(`
             INSERT INTO messages (conversation_id, role, content) 
@@ -371,10 +422,12 @@ exports.streamMessage = (req, res) => {
               }
             });
           });
+        } catch (error) {
+          console.error('AI服务调用失败:', error);
+          res.write(`data: ${JSON.stringify({code: 1003, message: error.message || 'AI服务调用失败', data: null})}\n\n`);
+          res.end();
         }
-      };
-      
-      sendChunk();
+      });
     });
   });
 };
