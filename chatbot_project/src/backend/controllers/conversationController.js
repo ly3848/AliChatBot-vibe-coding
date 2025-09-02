@@ -3,6 +3,11 @@ const { callAIModel, streamAIModel } = require('../services/aiService');
 
 // 生成对话标题
 function generateTitle(firstMessage) {
+  // 处理null和undefined的情况
+  if (firstMessage === null || firstMessage === undefined) {
+    firstMessage = String(firstMessage);
+  }
+  
   // 取消息的前15个字符作为标题，加上省略号
   if (firstMessage.length > 15) {
     return firstMessage.substring(0, 15) + '...';
@@ -12,8 +17,15 @@ function generateTitle(firstMessage) {
 
 // 获取对话列表
 exports.getConversations = (req, res) => {
-  const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 10;
+  // 处理分页参数，确保它们是正整数
+  let page = parseInt(req.query.page) || 1;
+  let limit = parseInt(req.query.limit) || 10;
+  
+  // 确保页码至少为1
+  page = Math.max(1, page);
+  // 确保每页数量在1-100之间
+  limit = Math.max(1, Math.min(100, limit));
+  
   const offset = (page - 1) * limit;
 
   // 查询总数
@@ -179,8 +191,8 @@ exports.sendMessage = async (req, res) => {
   const { conversation_id } = req.params;
   const { content } = req.body;
 
-  // 参数验证
-  if (!content) {
+  // 参数验证 - 检查内容是否为空或只包含空格
+  if (!content || typeof content !== 'string' || content.trim() === '') {
     return res.status(400).json({
       code: 1001,
       message: '参数content不能为空',
@@ -316,8 +328,8 @@ exports.streamMessage = (req, res) => {
   const { conversation_id } = req.params;
   const { content } = req.body;
 
-  // 参数验证
-  if (!content) {
+  // 参数验证 - 检查内容是否为空或只包含空格
+  if (!content || typeof content !== 'string' || content.trim() === '') {
     return res.status(400).json({
       code: 1001,
       message: '参数content不能为空',
@@ -334,12 +346,12 @@ exports.streamMessage = (req, res) => {
   // 检查对话是否存在
   db.get('SELECT id, title FROM conversations WHERE id = ?', [conversation_id], async (err, conversation) => {
     if (err) {
-      res.write(`data: ${JSON.stringify({code: 1003, message: '数据库查询失败', data: null})}\n\n`);
+      res.status(500).write(`data: ${JSON.stringify({code: 1003, message: '数据库查询失败', data: null})}\n\n`);
       return res.end();
     }
 
     if (!conversation) {
-      res.write(`data: ${JSON.stringify({code: 1002, message: '对话不存在', data: null})}\n\n`);
+      res.status(404).write(`data: ${JSON.stringify({code: 1002, message: '对话不存在', data: null})}\n\n`);
       return res.end();
     }
 
