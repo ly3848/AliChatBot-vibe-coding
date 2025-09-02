@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能问答系统</title>
+    <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+    <div class="app">
+        <!-- 顶部导航栏 -->
+        <header class="header">
+            <div class="logo">
+                <h1>智能问答系统</h1>
+            </div>
+        </header>
+
+        <div class="container">
+            <!-- 左侧边栏 -->
+            <aside class="sidebar">
+                <button id="new-conversation" class="btn btn-primary btn-block">+ 新建对话</button>
+                <div class="history-list" id="history-list">
+                    <!-- 历史对话列表将通过JavaScript动态加载 -->
+                </div>
+            </aside>
+
+            <!-- 主内容区 -->
+            <main class="main">
+                <div class="chat-container">
+                    <div class="chat-messages" id="chat-messages">
+                        <!-- 消息内容将通过JavaScript动态加载 -->
+                        <div class="message-welcome">
+                            <h2>欢迎使用智能问答系统</h2>
+                            <p>请输入您的问题，我将尽力为您解答。</p>
+                        </div>
+                    </div>
+                    
+                    <!-- 输入区域 -->
+                    <div class="input-container">
+                        <textarea 
+                            id="message-input" 
+                            placeholder="请输入您的问题..." 
+                            rows="3"
+                        ></textarea>
+                        <button id="send-button" class="btn btn-primary">发送</button>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="js/main.js"></script>
+</body>
+</html>
