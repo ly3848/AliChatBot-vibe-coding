@@ -1,4 +1,4 @@
-# 智能问答系统
+# AliChatBot - 基于阿里百炼的智能聊天机器人
 
 基于阿里百炼API的智能问答Web应用，支持多轮对话交互和对话历史管理。
 
@@ -51,6 +51,13 @@ chatbot_project/
 ```bash
 cd src/backend
 npm install
+```
+
+### 配置环境变量
+1. 在 `src/backend/` 目录下创建 `.env` 文件
+2. 添加阿里百炼API Key:
+```
+DASHSCOPE_API_KEY=your_api_key_here
 ```
 
 ### 启动服务
